@@ -1,0 +1,14 @@
+[package]
+name = "arrow-record-batch-transform"
+version = "0.1.0"
+edition = "2024"
+description = "Composable column transforms for Apache Arrow RecordBatches"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/agnosticeng/arrow-record-batch-transform"
+keywords = ["arrow", "transform", "record-batch", "column"]
+categories = ["database", "encoding"]
+
+[dependencies]
+arrow = { version = ">=57", features = ["json"] }
+arrow-json = ">=57"
+arrow-schema = ">=57"
