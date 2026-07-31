@@ -23,9 +23,15 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run release-plz
-        uses: release-plz/action@v0.5.131
+      - uses: taiki-e/install-action@v2
         with:
-          command: release
+          tool: cargo-semver-checks@0.49
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall release-plz --no-confirm --strategies=crate-meta-data,compile
+      - name: Configure git user
+        run: |
+          git config --global user.name "$(gh api graphql -f query='query { viewer { name login } }' --jq '.data.viewer.name // .data.viewer.login')"
+          git config --global user.email "$(gh api graphql -f query='query { viewer { databaseId login } }' --jq '.data.viewer.databaseId | tostring + "+" + .data.viewer.login + "@users.noreply.github.com"')"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: release-plz release --allow-dirty --git-token ${{ secrets.GITHUB_TOKEN }} -o json
