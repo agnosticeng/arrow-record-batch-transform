@@ -1,6 +1,6 @@
 [package]
 name = "arrow-record-batch-transform"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Composable column transforms for Apache Arrow RecordBatches"
 license = "MIT OR Apache-2.0"
