@@ -8,13 +8,13 @@ use arrow::array::ArrayRef;
 use arrow::datatypes::{Field, Schema};
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Apply a sequence of column transforms to a `RecordBatch`.
 ///
-/// Transforms are applied sequentially, in order. Each transform replaces the
-/// named column in-place while preserving the schema, data, and metadata of
-/// all other columns.
+/// All transforms are applied in a single pass over the columns. Transformed
+/// columns are replaced in-place; all other columns and metadata are preserved.
 ///
 /// # Errors
 ///
@@ -24,55 +24,36 @@ pub fn transform_record_batch(
     batch: &RecordBatch,
     transforms: &[(&str, &dyn ColumnTransform)],
 ) -> Result<RecordBatch, ArrowError> {
-    transforms.iter().try_fold(batch.clone(), |b, (col_name, processor)| {
-        apply_transform(&b, col_name, *processor)
-    })
-}
+    for (name, _) in transforms {
+        batch.schema().index_of(name).map_err(|_| {
+            ArrowError::InvalidArgumentError(format!("column '{}' not found in batch", name))
+        })?;
+    }
 
-fn apply_transform(
-    batch: &RecordBatch,
-    col_name: &str,
-    processor: &dyn ColumnTransform,
-) -> Result<RecordBatch, ArrowError> {
-    let col_idx = batch.schema().index_of(col_name).map_err(|_| {
-        ArrowError::InvalidArgumentError(format!("column '{}' not found in batch", col_name))
-    })?;
+    let map: HashMap<String, &dyn ColumnTransform> =
+        transforms.iter().map(|&(n, t)| (n.to_string(), t)).collect();
 
-    let new_col = processor.apply(batch.column(col_idx))?;
+    let mut new_fields: Vec<Field> = Vec::with_capacity(batch.num_columns());
+    let mut new_columns: Vec<ArrayRef> = Vec::with_capacity(batch.num_columns());
 
-    let new_fields: Vec<Field> = batch
-        .schema()
-        .fields()
-        .iter()
-        .enumerate()
-        .map(|(i, f)| {
-            if i == col_idx {
-                processor.output_field(f)
-            } else {
-                f.as_ref().clone()
-            }
-        })
-        .collect();
+    for (i, field) in batch.schema().fields().iter().enumerate() {
+        let col = batch.column(i);
+        if let Some(t) = map.get(field.name()) {
+            new_fields.push(t.output_field(field));
+            new_columns.push(t.apply(col)?);
+        } else {
+            new_fields.push(field.as_ref().clone());
+            new_columns.push(col.clone());
+        }
+    }
 
-    let new_schema = Arc::new(Schema::new_with_metadata(
-        new_fields,
-        batch.schema().metadata().clone(),
-    ));
-
-    let new_columns: Vec<ArrayRef> = batch
-        .columns()
-        .iter()
-        .enumerate()
-        .map(|(i, col)| {
-            if i == col_idx {
-                new_col.clone()
-            } else {
-                col.clone()
-            }
-        })
-        .collect();
-
-    RecordBatch::try_new(new_schema, new_columns)
+    RecordBatch::try_new(
+        Arc::new(Schema::new_with_metadata(
+            new_fields,
+            batch.schema().metadata().clone(),
+        )),
+        new_columns,
+    )
 }
 
 #[cfg(test)]
