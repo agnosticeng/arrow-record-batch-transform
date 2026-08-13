@@ -1,7 +1,9 @@
 mod column_transform;
+mod denormalize;
 mod to_json;
 
 pub use column_transform::ColumnTransform;
+pub use denormalize::{Denormalize, DenormalizeOptions, MissingLeaf, denormalize_record_batch};
 pub use to_json::ToJson;
 
 use arrow::array::ArrayRef;
@@ -30,8 +32,10 @@ pub fn transform_record_batch(
         })?;
     }
 
-    let map: HashMap<String, &dyn ColumnTransform> =
-        transforms.iter().map(|&(n, t)| (n.to_string(), t)).collect();
+    let map: HashMap<String, &dyn ColumnTransform> = transforms
+        .iter()
+        .map(|&(n, t)| (n.to_string(), t))
+        .collect();
 
     let mut new_fields: Vec<Field> = Vec::with_capacity(batch.num_columns());
     let mut new_columns: Vec<ArrayRef> = Vec::with_capacity(batch.num_columns());
@@ -93,13 +97,11 @@ mod tests {
 
     #[test]
     fn to_json_list() {
-        let col = Arc::new(
-            ListArray::from_iter_primitive::<Int32Type, _, _>(vec![
-                Some(vec![Some(1), Some(2), Some(3)]),
-                Some(vec![Some(4), None, Some(6)]),
-                None,
-            ]),
-        ) as ArrayRef;
+        let col = Arc::new(ListArray::from_iter_primitive::<Int32Type, _, _>(vec![
+            Some(vec![Some(1), Some(2), Some(3)]),
+            Some(vec![Some(4), None, Some(6)]),
+            None,
+        ])) as ArrayRef;
         let result = ToJson.apply(&col).unwrap();
         let list = result.as_any().downcast_ref::<ListArray>().unwrap();
         let inner = list.values();
@@ -124,7 +126,11 @@ mod tests {
 
     #[test]
     fn output_field_list() {
-        let input = Field::new("xs", DataType::List(Arc::new(Field::new("item", DataType::Int32, true))), false);
+        let input = Field::new(
+            "xs",
+            DataType::List(Arc::new(Field::new("item", DataType::Int32, true))),
+            false,
+        );
         let output = ToJson.output_field(&input);
         assert_eq!(output.name(), "xs");
         assert_eq!(
@@ -177,8 +183,16 @@ mod tests {
 
         let result = transform_record_batch(&batch, &[("a", &ToJson), ("b", &ToJson)]).unwrap();
 
-        let a = result.column(0).as_any().downcast_ref::<LargeStringArray>().unwrap();
-        let b = result.column(1).as_any().downcast_ref::<LargeStringArray>().unwrap();
+        let a = result
+            .column(0)
+            .as_any()
+            .downcast_ref::<LargeStringArray>()
+            .unwrap();
+        let b = result
+            .column(1)
+            .as_any()
+            .downcast_ref::<LargeStringArray>()
+            .unwrap();
         assert_eq!(a.value(0), "1");
         assert_eq!(a.value(1), "2");
         assert_eq!(b.value(0), "3");
@@ -188,7 +202,11 @@ mod tests {
     #[test]
     fn transform_missing_column() {
         let schema = Arc::new(Schema::new(vec![Field::new("a", DataType::Int32, true)]));
-        let batch = RecordBatch::try_new(schema, vec![Arc::new(Int32Array::from(vec![1])) as ArrayRef]).unwrap();
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![Arc::new(Int32Array::from(vec![1])) as ArrayRef],
+        )
+        .unwrap();
 
         let result = transform_record_batch(&batch, &[("nonexistent", &ToJson)]);
         assert!(result.is_err());
@@ -200,7 +218,11 @@ mod tests {
             vec![Field::new("a", DataType::Int32, true)],
             [("key".to_owned(), "val".to_owned())].into(),
         ));
-        let batch = RecordBatch::try_new(schema, vec![Arc::new(Int32Array::from(vec![1])) as ArrayRef]).unwrap();
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![Arc::new(Int32Array::from(vec![1])) as ArrayRef],
+        )
+        .unwrap();
 
         let result = transform_record_batch(&batch, &[("a", &ToJson)]).unwrap();
         assert_eq!(result.schema().metadata().get("key").unwrap(), "val");
