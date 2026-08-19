@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook: formatting, lint, and tests for ch-arrow-http.
+# Mirrors the gates in .github/workflows/ci.yml.
+#
+# Auto-installed by cargo-husky (dev-dependency) on the first `cargo test`.
+# See the "user-hooks" feature: this file is copied verbatim to `.git/hooks/pre-push`.
+#
+# Opt out of running tests on every push (faster) with:
+#   git config hooks.skipTests true
+#
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+echo "--- cargo check ---"
+cargo check --locked
+
+echo "--- cargo fmt --check ---"
+cargo fmt --check
+
+echo "--- cargo clippy --all-targets -- -D warnings ---"
+cargo clippy --all-targets --locked -- -D warnings
+
+if [[ "$(git config --get hooks.skipTests 2>/dev/null || echo '')" != "true" ]]; then
+  echo "--- cargo test ---"
+  cargo test --locked
+else
+  echo "--- cargo test (skipped: hooks.skipTests=true) ---"
+fi
+
+echo "pre-push checks passed."

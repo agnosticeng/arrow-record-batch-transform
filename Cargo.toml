@@ -12,3 +12,6 @@ categories = ["database", "encoding"]
 arrow = { version = ">=57", features = ["json"] }
 arrow-json = ">=57"
 arrow-schema = ">=57"
+
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
