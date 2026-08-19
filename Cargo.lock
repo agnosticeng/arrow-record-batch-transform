@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "arrow-record-batch-transform"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "arrow",
  "arrow-json",
