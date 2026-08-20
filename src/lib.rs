@@ -1,10 +1,12 @@
 mod column_transform;
 mod denormalize;
 mod to_json;
+mod to_timestamp;
 
 pub use column_transform::ColumnTransform;
 pub use denormalize::{Denormalize, DenormalizeOptions, MissingLeaf, denormalize_record_batch};
 pub use to_json::ToJson;
+pub use to_timestamp::ToTimestamp;
 
 use arrow::array::ArrayRef;
 use arrow::datatypes::{Field, Schema};
